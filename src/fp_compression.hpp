@@ -1,17 +1,18 @@
 #ifndef _FP_COMPRESSION_HPP
 #define _FP_COMPRESSION_HPP
 
-#include <vector>
-
 #include "rk_matrix.hpp"
 
-#ifdef HAVE_COMPOSYX
+#ifdef HMAT_HAVE_COMPOSYX
 #include "composyx.hpp"
 #include "composyx/interfaces/basic_concepts.hpp"
 #include "composyx/utils/Arithmetic.hpp"
 #include "composyx/utils/ZFP_compressor.hpp"
 #include "composyx/utils/SZ_compressor.hpp"
 #include "composyx/utils/SZ3_compressor.hpp"
+
+
+
 
 namespace hmat 
 {

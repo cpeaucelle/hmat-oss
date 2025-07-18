@@ -1,7 +1,7 @@
 #include "fp_compression.hpp"
 #include "data_types.hpp"
 
-#ifdef HAVE_COMPOSYX
+#ifdef HMAT_HAVE_COMPOSYX
 
 
 namespace hmat{

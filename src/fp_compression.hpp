@@ -40,7 +40,7 @@ namespace hmat
 template<typename T>
 class SZcompressor : public FPCompressorInterface<T> {
 private:
-    composyx::SZ_compressor<T, composyx::SZ_CompressionMode::POINTWISE>* _compressor;
+    composyx::SZ_compressor<T, composyx::SZ_CompressionMode::ABSOLUTE>* _compressor;
     size_t _size;
 
     mutable std::recursive_mutex _mutex;

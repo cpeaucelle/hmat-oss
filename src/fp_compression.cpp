@@ -113,19 +113,9 @@ template <typename T>
 void SZcompressor<T>::compress(T* data, size_t size, double epsilon)
 {
     std::lock_guard<std::recursive_mutex> lock(_mutex);
-
-    //epsilon if absolute value but composyx::SZ_compressor only accept relative error bound at the moment
-
+    
     this->_size = size;
-
-    double max_abs = 0.0;
-    for(size_t i = 0; i < size; i++)
-    {
-        max_abs = std::max(max_abs, (double)std::abs(data[i]));
-    }
-    double zeta_rel = epsilon / std::max(max_abs, 1e-300);
-
-    this->_compressor = new composyx::SZ_compressor<T, composyx::SZ_CompressionMode::POINTWISE>(data, size, zeta_rel);
+    this->_compressor = new composyx::SZ_compressor<T, composyx::SZ_CompressionMode::ABSOLUTE>(data, size, epsilon);
 }
 
 template<typename T>

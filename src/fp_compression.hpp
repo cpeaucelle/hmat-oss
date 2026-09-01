@@ -46,7 +46,7 @@ private:
     mutable std::recursive_mutex _mutex;
 
 public:
-    SZcompressor() {};
+    SZcompressor() : _compressor(nullptr), _size(0) {};
 
     ~SZcompressor();
 
@@ -87,7 +87,7 @@ private:
     mutable std::recursive_mutex _mutex;
 
 public:
-    SZ3compressor() {};
+    SZ3compressor() : _compressor(nullptr), _size(0) {};
 
     ~SZ3compressor();
 
@@ -129,7 +129,7 @@ private:
     mutable std::recursive_mutex _mutex;
 
 public:
-    ZFPcompressor() {};
+    ZFPcompressor() : _compressor(nullptr), _size(0) {};
 
     ~ZFPcompressor();
 

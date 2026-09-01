@@ -56,8 +56,54 @@ namespace hmat {
       virtual ~FPCompressorInterface() {};
 
       virtual FPCompressorInterface* copy() = 0;
+
+      // Debug fonction that prints the relative frobenius norm between the original data and the decompressed data.
+      // At the end of the execution, the block is compressed, thus this fonction can replace the compress() function 
+      // for debug purposes without altering the behaviour of algorithms
+      void debug_compare(T* data, size_t size, double epsilon) {
+        // 1. Saving original data
+        std::vector<T> original(data, data + size);
+
+        // 2. Compression (In place)
+        this->compress(data, size, epsilon);
+
+        // 3. Decompression in a temporary vector
+        // decompressCopy allows to keep the internal buffer of the compressed data intact, 
+        // allowing the block to remain in a "compressed" state
+        // in the case the programm keeps running afterwards
+        std::vector<T> decompressed = this->decompressCopy();
+
+        // 4. Computing norms
+        double norm_diff_sq = 0.0;
+        double norm_orig_sq = 0.0;
+        double max_abs_err = 0.0;
+
+        for (size_t i = 0; i < size; ++i) {
+            // std::abs automatically handles reals (double) and complex (std::complex) types
+            double diff = std::abs(original[i] - decompressed[i]);
+            double val = std::abs(original[i]);
+
+            norm_diff_sq += diff * diff;
+            norm_orig_sq += val * val;
+
+            if (diff > max_abs_err) {
+                max_abs_err = diff;
+            }
+        }
+
+        double rel_l2_error = (norm_orig_sq == 0.0) ? 0.0 : std::sqrt(norm_diff_sq / norm_orig_sq);
+        
+        // 5. Evaluate the contract (with a tiny margin for floating-point inaccuracies)
+        bool is_contract_respected = (max_abs_err <= epsilon * 1.000001);
+        const char* status = is_contract_respected ? "PASSED" : "FAILED";
+
+        // 6. Print diagnostics using fprintf
+        fprintf(stdout, "[Debug] Status: %-6s | Data size: %zu | Local Delta: %e | Max Abs Error: %e | Block Rel Error: %e | Ratio: %f\n", 
+                status, size, epsilon, max_abs_err, rel_l2_error, this->get_ratio());
+    }
   
   };
+
 
   template<typename T>
   FPCompressorInterface<T>* initCompressor(hmat_FPcompress_t method);

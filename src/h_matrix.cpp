@@ -150,6 +150,19 @@ HMatrix<T>::HMatrix(const ClusterTree* _rows, const ClusterTree* _cols, const hm
     isTriUpper(false), isTriLower(false), keepSameRows(true), keepSameCols(true), temporary_(false),
     ownRowsClusterTree_(false), ownColsClusterTree_(false), localSettings(settings, 1e-4)
 {
+
+  if(FPSettings)
+  {
+    localSettings.FPSettings = FPSettings;
+  }
+  else
+  {
+    // L'ajout du mot-clé "static" permet à la variable de survivre à la fin du constructeur
+    static hmat_fp_settings_t default_s = DEFAULT_FP_SETTINGS;
+    localSettings.FPSettings = &default_s;
+  }
+  this->SetFPCompressionSettings(localSettings.FPSettings);
+
   if (isVoid())
     return;
   const bool lowRank = admissibilityCondition->isLowRank(*rows_, *cols_);
@@ -170,12 +183,11 @@ HMatrix<T>::HMatrix(const ClusterTree* _rows, const ClusterTree* _cols, const hm
   {
     fpProfile_ = FPCompressionProfile();
   }
+  
+ 
 
-  if(FPSettings)
-  {
-    localSettings.FPSettings = FPSettings;
-  }
 }
+
 
 template<typename T>
 bool HMatrix<T>::split(AdmissibilityCondition * admissibilityCondition, bool lowRank,
@@ -234,14 +246,22 @@ HMatrix<T>::HMatrix(const hmat::MatrixSettings * settings, hmat_fp_settings_t * 
     keepSameRows(true), keepSameCols(true), temporary_(false), ownRowsClusterTree_(false),
     ownColsClusterTree_(false), localSettings(settings, -1.0)
     {
-      if(FPSettings){
+      if(FPSettings)
+      {
         localSettings.FPSettings = FPSettings;
       }
-
+      else
+      {
+        // L'ajout du mot-clé "static" permet à la variable de survivre à la fin du constructeur
+        static hmat_fp_settings_t default_s = DEFAULT_FP_SETTINGS;
+        localSettings.FPSettings = &default_s;
+      }
       if(this->isLeaf())
       {
         fpProfile_ = FPCompressionProfile();
       }
+
+      this->SetFPCompressionSettings(localSettings.FPSettings);
 }
 
 template<typename T> HMatrix<T> * HMatrix<T>::internalCopy(bool temporary, bool withRowChild, bool withColChild) const {

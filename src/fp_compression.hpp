@@ -1,6 +1,9 @@
 #pragma once
 #include <vector>
 #include <mutex>
+#include <complex>
+#include <cstdint>
+#include <cstring>
 
 #include "rk_matrix.hpp"
 
@@ -32,6 +35,116 @@
 
 
 #endif //HAVE_COMPOSYX
+
+
+// =====================================================================
+// 1. Emulation of float16_t with uint16_t
+// =====================================================================
+struct HalfFloat {
+    uint16_t value;
+
+    // --- Binary conversion utilities (IEEE-754) ---
+    static uint16_t float_to_half_bits(float f) {
+        uint32_t x;
+        std::memcpy(&x, &f, sizeof(float));
+        uint32_t sign = (x >> 16) & 0x8000;
+        int32_t exp = ((x >> 23) & 0xff) - 127 + 15;
+        uint32_t mant = x & 0x007fffff;
+
+        if (exp <= 0) return sign; // Simplification: flush denormals to zero
+        if (exp >= 31) return sign | 0x7c00 | (mant ? 1 : 0); // Infinity and NaN
+        return sign | (exp << 10) | (mant >> 13); // Normal numbers
+    }
+
+    static float half_bits_to_float(uint16_t h) {
+        uint32_t sign = (h & 0x8000) << 16;
+        int32_t exp = (h & 0x7c00) >> 10;
+        uint32_t mant = h & 0x03ff;
+
+        uint32_t x = 0;
+        if (exp == 0 && mant == 0) x = sign;
+        else if (exp == 31) x = sign | 0x7f800000 | (mant << 13);
+        else x = sign | ((exp - 15 + 127) << 23) | (mant << 13);
+
+        float f;
+        std::memcpy(&f, &x, sizeof(float));
+        return f;
+    }
+
+public:
+    // --- Constructors ---
+    HalfFloat() = default; // Required for std::vector
+    
+    // Constructor from float (binary conversion)
+    HalfFloat(float f) : value(float_to_half_bits(f)) {}
+    
+    // Constructor from double (routes through float)
+    HalfFloat(double d) : HalfFloat(static_cast<float>(d)) {}
+
+    // --- Conversion operators ---
+    // Conversion to float
+    operator float() const { return half_bits_to_float(value); }
+    
+    // Conversion to double (routes through float)
+    operator double() const { return static_cast<double>(half_bits_to_float(value)); }
+};
+
+
+// =====================================================================
+// 2. Emulation of complex<float16>
+// =====================================================================
+struct ComplexHalf {
+    HalfFloat real;
+    HalfFloat imag;
+
+public:
+    // --- Constructors ---
+    ComplexHalf() = default; // Required for std::vector
+    
+    // Constructor from std::complex<float>
+    ComplexHalf(std::complex<float> c) : real(c.real()), imag(c.imag()) {}
+    
+    // Constructor from std::complex<double> (delegates to HalfFloat(double))
+    ComplexHalf(std::complex<double> c) : real(c.real()), imag(c.imag()) {}
+
+    // --- Conversion operators ---
+    // Conversion to std::complex<float>
+    operator std::complex<float>() const { 
+        return std::complex<float>(static_cast<float>(real), static_cast<float>(imag)); 
+    }
+    
+    // Conversion to std::complex<double>
+    operator std::complex<double>() const { 
+        return std::complex<double>(static_cast<double>(real), static_cast<double>(imag)); 
+    }
+};
+
+// =====================================================================
+// Type Traits: Mapping original types to compressed equivalents
+// =====================================================================
+
+// --- 1. Single Precision (32-bit) Traits ---
+template <typename T> struct SinglePrecision;
+
+template <> struct SinglePrecision<float>                { using type = float; };
+template <> struct SinglePrecision<double>               { using type = float; };
+template <> struct SinglePrecision<std::complex<float>>  { using type = std::complex<float>; };
+template <> struct SinglePrecision<std::complex<double>> { using type = std::complex<float>; };
+
+template <typename T>
+using SinglePrecision_t = typename SinglePrecision<T>::type;
+
+
+// --- 2. Half Precision (16-bit) Traits ---
+template <typename T> struct HalfPrecision;
+
+template <> struct HalfPrecision<float>                { using type = HalfFloat; };
+template <> struct HalfPrecision<double>               { using type = HalfFloat; };
+template <> struct HalfPrecision<std::complex<float>>  { using type = ComplexHalf; };
+template <> struct HalfPrecision<std::complex<double>> { using type = ComplexHalf; };
+
+template <typename T>
+using HalfPrecision_t = typename HalfPrecision<T>::type;
 
 
 namespace hmat 
@@ -216,10 +329,33 @@ public:
 template<typename T>
 class Defaultcompressor : public FPCompressorInterface<T> {
 private:
-    std::vector<T> _data;
+    using HalfPrecType = HalfPrecision_t<T>;
+    using SinglePrecType = SinglePrecision_t<T>;
+
+    // --- Dynamic Variant Generation ---
+    // We use nested std::conditional_t to prevent duplicate types in the variant.
+    // Duplicate types would make assignment and std::visit ambiguous.
+    using StorageVariant = std::conditional_t<
+        // Condition 1: Is T the same as Single precision? (e.g., T is float)
+        std::is_same_v<T, SinglePrecType>,
+        
+        // IF TRUE (T is Single or lower):
+        std::conditional_t<
+            // Condition 2: Is T also the same as Half precision? 
+            std::is_same_v<T, HalfPrecType>,
+            std::variant<std::vector<HalfPrecType>>,                                 // Only 1 type
+            std::variant<std::vector<HalfPrecType>, std::vector<T>>                  // 2 types (Half, Single)
+        >,
+        
+        // IF FALSE (T is higher than Single, e.g., double):
+        std::variant<std::vector<HalfPrecType>, std::vector<SinglePrecType>, std::vector<T>> // 3 types
+    >;
+
+    StorageVariant _data;
+    double _ratio;
 
 public:
-    Defaultcompressor() {};
+    Defaultcompressor() {_ratio = 1;};
 
     void compress(T* data, size_t size, double epsilon) override;
 

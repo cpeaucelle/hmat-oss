@@ -64,14 +64,76 @@ FPCompressorInterface<T>* initCompressor(hmat_FPcompress_t method)
 template<typename T>
 void Defaultcompressor<T>::compress(T* data, size_t size, double epsilon)
 {
-    this->_data = std::vector<T>(data, data + size);
+    //unit roundoffs
+    constexpr double float_unit_roundoff = std::numeric_limits<float>::epsilon(); // ~1.19e-7
+    constexpr double half_unit_roundoff  = 9.77e-4;
+
+    //Computing the max absolute value
+    double max_abs = 0.0;
+    
+    for (size_t i = 0; i < size; ++i) {
+        // std::abs fonctionne nativement pour float, double, ET std::complex
+        double current_abs = std::abs(data[i]); 
+        if (current_abs > max_abs) {
+            max_abs = current_abs;
+        }
+    }
+    
+   
+    //Maximum absolute error induced by compression
+    double eps_rel = (max_abs == 0.0) 
+            ? std::numeric_limits<double>::infinity() 
+            : (epsilon / max_abs);
+
+    // --- Step A: Check if we should keep Double precision ---
+    // Evaluated at compile-time: Is T a double-precision type?
+    if constexpr (!std::is_same_v<T, SinglePrecType>) {
+        if (eps_rel < float_unit_roundoff) {
+            // Epsilon is very strict, keep original high precision
+            if (std::holds_alternative<std::vector<T>>(_data)) {
+                std::get<std::vector<T>>(_data).assign(data, data + size);
+            } else {
+                _data = std::vector<T>(data, data + size);
+            }
+            _ratio = 1.0;
+            return;
+        }
+    }
+
+    // --- Step B: Check if we should drop to (or keep) Single precision ---
+    // Evaluated at compile-time: Is Single better than Half for this type?
+    if constexpr (!std::is_same_v<SinglePrecType, HalfPrecType>) {
+        if (eps_rel < half_unit_roundoff) {
+            // Epsilon allows Single precision. 
+            // The vector constructor automatically casts T -> SinglePrecType (e.g., double -> float)
+            if (std::holds_alternative<std::vector<SinglePrecType>>(_data)) {
+                std::get<std::vector<SinglePrecType>>(_data).assign(data, data + size);
+            } else {
+                _data = std::vector<SinglePrecType>(data, data + size);
+            }
+            _ratio = static_cast<double>(sizeof(T)) / sizeof(SinglePrecType);
+            return;
+        }
+    }
+
+    // --- Step C: Default fallback to Half precision ---
+    // Epsilon is large enough, drop to minimum precision.
+    // The vector constructor automatically casts T -> HalfPrecType
+    // using the custom constructors we wrote in Step 1!
+    if (std::holds_alternative<std::vector<HalfPrecType>>(_data)) {
+        std::get<std::vector<HalfPrecType>>(_data).assign(data, data + size);
+    } else {
+        _data = std::vector<HalfPrecType>(data, data + size);
+    }
+    _ratio = static_cast<double>(sizeof(T)) / sizeof(HalfPrecType);
 }
 
 template<typename T>
 std::vector<T> Defaultcompressor<T>::decompress()
 {
-    std::vector<T> out = _data;
-    this->_data.clear();
+    std::vector<T> out = decompressCopy();
+    std::visit([](auto& vec) { vec.clear(); }, _data);
+    _ratio = 1; //ratio is reset
     return out;
 }
 
@@ -79,25 +141,30 @@ template <typename T>
 void Defaultcompressor<T>::decompress(T *dest)
 {
     decompressCopy(dest);
-    this->_data.clear();
+    std::visit([](auto& vec) { vec.clear(); }, _data);
+    _ratio = 1; //Ratio is reset
 }
 
 template <typename T>
 std::vector<T> Defaultcompressor<T>::decompressCopy()
 {
-    return _data;
+    return std::visit([](auto& vec) {
+        return std::vector<T>(vec.begin(), vec.end());
+    }, _data);
 }
 
 template <typename T>
 void Defaultcompressor<T>::decompressCopy(T *dest)
-{
-    std::copy(_data.begin(), _data.end(), dest);
+{   
+    std::visit([dest](auto& vec) {
+        std::copy(vec.begin(), vec.end(), dest);
+    }, _data);
 }
 
 template <typename T>
 double Defaultcompressor<T>::get_ratio()
 {
-    return 1;
+    return _ratio;
 }
 
 

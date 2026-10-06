@@ -26,6 +26,10 @@
 #include "composyx/utils/SZ3_compressor.hpp"
 #endif //COMPOSYX_USE_SZ3_COMPRESSOR
 
+#ifdef COMPOSYX_USE_BLOSC2_COMPRESSOR
+#include "composyx/utils/Blosc2_compressor.hpp"
+#endif //COMPOSYX_USE_BLOSC2_COMPRESSOR
+
 
 #endif //HAVE_COMPOSYX
 
@@ -159,6 +163,49 @@ public:
 };
 
 #endif //COMPOSYX_USE_ZFP_COMPRESSOR
+
+
+#ifdef COMPOSYX_USE_BLOSC2_COMPRESSOR
+
+template<typename T>
+class BLOSC2compressor : public FPCompressorInterface<T> {
+private:
+    composyx::Blosc2_compressor<T>* _compressor;
+    size_t _size;
+
+    mutable std::recursive_mutex _mutex;
+
+public:
+    BLOSC2compressor() : _compressor(nullptr), _size(0) {};
+
+    ~BLOSC2compressor();
+
+    void compress(T* data, size_t size, double epsilon) override;
+
+    std::vector<T> decompress() override;
+
+    void decompress(T* dest) override;
+
+    std::vector<T> decompressCopy() override;
+
+    void decompressCopy(T* dest) override;
+
+    double get_ratio() override;
+
+    BLOSC2compressor* copy() override {
+      std::lock_guard<std::recursive_mutex> lock(_mutex);
+      
+      BLOSC2compressor* newComp = new BLOSC2compressor();
+      newComp->_size = _size;
+      //TODO : implement deepcopy method in composyx
+      //newComp->_compressor = _compressor->copy();
+      return newComp;
+    }
+
+    
+};
+
+#endif //COMPOSYX_USE_BLOSC2_COMPRESSOR
 
 
 #endif // HAVE_COMPOSYX

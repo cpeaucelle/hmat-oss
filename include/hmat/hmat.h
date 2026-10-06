@@ -74,7 +74,8 @@ typedef enum {
   DEFAULT_COMPRESSOR = 0, 
   ZFP_COMPRESSOR = 1,
   SZ_COMPRESSOR = 2, 
-  SZ3_COMPRESSOR = 3
+  SZ3_COMPRESSOR = 3,
+  BLOSC2_COMPRESSOR = 4
 }hmat_FPcompress_t;
 
 typedef enum {

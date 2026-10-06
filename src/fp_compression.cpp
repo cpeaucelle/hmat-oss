@@ -40,6 +40,13 @@ FPCompressorInterface<T>* initCompressor(hmat_FPcompress_t method)
             res = new SZcompressor<T>();
             break;
     #endif //COMPOSYX_USE_SZ_COMPRESSOR
+
+    #ifdef COMPOSYX_USE_BLOSC2_COMPRESSOR
+
+        case BLOSC2_COMPRESSOR:
+            res = new BLOSC2compressor<T>();
+            break;
+    #endif //COMPOSYX_USE_BLOSC2_COMPRESSOR
         
     #endif //HAVE_COMPOSYX
 
@@ -300,14 +307,100 @@ double ZFPcompressor<T>::get_ratio()
     return this->_compressor->get_ratio();
 }
 
-// Templates declaration
-
 #endif //COMPOSYX_USE_ZFP_COMPRESSOR
+
+
+#ifdef COMPOSYX_USE_BLOSC2_COMPRESSOR
+
+template <typename T>
+BLOSC2compressor<T>::~BLOSC2compressor()
+{
+     if(_compressor)
+    {
+         delete _compressor;
+        _compressor = nullptr;
+    }
+}
+
+template <typename T>
+void BLOSC2compressor<T>::compress(T* data, size_t size, double epsilon)
+{
+    //printf("BLOSC2 Compress\n");
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+
+    double max = 0.0;
+    for(int i = 0; i < size; i++)
+    {
+        if (std::abs(data[i]) > max)
+        {
+            max = std::abs(data[i]);
+        }
+    }
+    //preventing division by 0
+    if (max < 1e-300) {
+        max = 1.0; 
+    }
+    double zeta = epsilon / max;
+
+    this->_size = size;
+    this->_compressor = new composyx::Blosc2_compressor<T>(data, size, zeta);
+}
+
+template<typename T>
+std::vector<T> BLOSC2compressor<T>::decompress()
+{
+    //printf("BLOSC2 Decompress\n");
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+
+    std::vector<T> out = decompressCopy();
+    delete _compressor;
+    _compressor = nullptr;
+    return out;
+}
+
+template <typename T>
+void BLOSC2compressor<T>::decompress(T *dest)
+{
+   // printf("BLOSC2 Decompress\n");
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+    decompressCopy(dest);
+    delete _compressor;
+    _compressor = nullptr;
+}
+
+template <typename T>
+std::vector<T> BLOSC2compressor<T>::decompressCopy()
+{
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+
+    return _compressor->decompress();
+}
+
+template <typename T>
+void BLOSC2compressor<T>::decompressCopy(T *dest)
+{
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+    _compressor->decompress(dest);
+}
+
+template <typename T>
+double BLOSC2compressor<T>::get_ratio()
+{
+    std::lock_guard<std::recursive_mutex> lock(_mutex);
+
+    //printf("Number of bytes : %ld, Compressed bytes : %ld, ratio = %f\n", sizeof(T)*this->_compressor->get_n_elts(), this->_compressor->get_compressed_bytes(), this->_compressor->get_ratio());
+    return this->_compressor->get_ratio();
+}
+
+
+#endif //COMPOSYX_USE_BLOSC2_COMPRESSOR
+
 
 #endif // HAVE_COMPOSYX
 
 
 
+// Templates declaration
 template FPCompressorInterface<S_t>* initCompressor(hmat_FPcompress_t method);
 template FPCompressorInterface<D_t>* initCompressor(hmat_FPcompress_t method);
 template FPCompressorInterface<C_t>* initCompressor(hmat_FPcompress_t method);

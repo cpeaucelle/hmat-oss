@@ -2281,6 +2281,13 @@ void HMatrix<T>::copyAndTranspose(const HMatrix<T>* o) {
   assert(this->isLeaf() == o->isLeaf());
 
   if (this->isLeaf()) {
+    bool was_fp_compressed = o->isFPcompressed();
+    if(was_fp_compressed)
+    {
+      // Cannot copy the data in their compressed form because composyx does not allows it yet.
+      const_cast<HMatrix<T>*>(o)->FPdecompress();
+    }
+
     if (o->isRkMatrix()) {
       assert(!isFullMatrix());
       if (rk()) {
@@ -2306,6 +2313,13 @@ void HMatrix<T>::copyAndTranspose(const HMatrix<T>* o) {
           oF->diagonal->copy(full()->diagonal);
         }
       }
+    }
+    if(was_fp_compressed)
+    {
+      // Not optimal in term of performance, but we need to allow the copies of the compressors in composyx beforehand.
+      // Once it is allowed, the copy of compressed data is to be done in FullMatrix::copy() and RkMatrix::copy(), and these lines can be removed;
+      const_cast<HMatrix<T>*>(this)->FPcompress();
+      const_cast<HMatrix<T>*>(o)->FPcompress();    
     }
   } else {
     for (int i=0 ; i<nrChildRow() ; i++)
@@ -2369,6 +2383,14 @@ void HMatrix<T>::copy(const HMatrix<T>* o) {
     if (isAssembled() && isNull() && o->isNull()) {
       return;
     }
+
+    bool was_fp_compressed = o->isFPcompressed();
+    if(was_fp_compressed)
+    {
+      // Cannot copy the data in their compressed form because composyx does not allows it yet.
+      const_cast<HMatrix<T>*>(o)->FPdecompress();
+    }
+
     // When the matrix was not allocated but only the structure
     if (o->isFullMatrix() && isFullMatrix()) {
       o->full()->copy(full());
@@ -2383,6 +2405,13 @@ void HMatrix<T>::copy(const HMatrix<T>* o) {
     if (o->isRkMatrix()) {
       rk()->copy(o->rk());
       rank_ = rk()->rank();
+    }
+    if(was_fp_compressed)
+    {
+      // Not optimal in term of performance, but we need to allow the copies of the compressors in composyx beforehand.
+      // Once it is allowed, the copy of compressed data is to be done in FullMatrix::copy() and RkMatrix::copy(), and these lines can be removed;
+      const_cast<HMatrix<T>*>(this)->FPcompress();
+      const_cast<HMatrix<T>*>(o)->FPcompress();    
     }
   } else {
     assert(o->rank_==NONLEAF_BLOCK);
@@ -2869,6 +2898,7 @@ void HMatrix<T>::mdmtProduct(const HMatrix<T>* m, const HMatrix<T>* d) {
       assert(*m->cols() == *d->rows());
       assert(*m_copy->rk()->cols == *d->rows());
       m_copy->multiplyWithDiag(d); // right multiplication by D
+      m_copy->FPdecompressL1();
       RkMatrix<T>* rkMat = RkMatrix<T>::multiplyRkRk('N', 'T', m_copy->rk(), m->rk(), m->lowRankEpsilon());
       delete m_copy;
 
@@ -2878,6 +2908,7 @@ void HMatrix<T>::mdmtProduct(const HMatrix<T>* m, const HMatrix<T>* d) {
       HMatrix<T>* copy_m = m->copy();
       HMAT_ASSERT(copy_m);
       copy_m->multiplyWithDiag(d); // right multiplication by D
+      copy_m->FPdecompressL1();
 
       FullMatrix<T>* fullMat = HMatrix<T>::multiplyFullMatrix('N', 'T', copy_m, m);
       HMAT_ASSERT(fullMat);
@@ -2903,6 +2934,7 @@ void HMatrix<T>::mdmtProduct(const HMatrix<T>* m, const HMatrix<T>* d) {
       if (!m->isNull()) {
         HMatrix<T>* m_copy = m->copy();
         m_copy->multiplyWithDiag(d);
+        m_copy->FPdecompressL1();
 
         RkMatrix<T>* rkMat = RkMatrix<T>::multiplyRkRk('N', 'T', m_copy->rk(), m->rk(), m->lowRankEpsilon());
         FullMatrix<T>* fullMat = rkMat->eval();

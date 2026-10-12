@@ -152,6 +152,8 @@ template<typename T> void FullMatrix<T>::transpose() {
 }
 
 template<typename T> FullMatrix<T>* FullMatrix<T>::copy(FullMatrix<T>* result) const {
+  assert(!isFPcompressed() && "ERROR : Trying to copy a compressed FullMatrix. Use HMatrix::copy() to ensure prior decompression.");
+
   if(result == NULL)
     result = new FullMatrix<T>(rows_, cols_, false);
 
@@ -172,6 +174,7 @@ template<typename T> FullMatrix<T>* FullMatrix<T>::copy(FullMatrix<T>* result) c
 }
 
 template<typename T> FullMatrix<T>* FullMatrix<T>::copyAndTranspose() const {
+  assert(!isFPcompressed() && "ERROR : Trying to copyAndTranspose a compressed FullMatrix. Use HMatrix::copy() to ensure prior decompression.");
   assert(cols_);
   assert(rows_);
   FullMatrix<T>* result = new FullMatrix<T>(cols_, rows_);

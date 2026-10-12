@@ -1539,6 +1539,7 @@ template<typename T> void RkMatrix<T>::gemmRk(double epsilon, char transHA, char
 }
 
 template<typename T> void RkMatrix<T>::copy(const RkMatrix<T>* o) {
+  assert(!isFPcompressed() && "ERROR : Trying to copy a compressed RkMatrix. Use HMatrix::copy() to ensure prior decompression.");
   delete a;
   delete b;
   rows = o->rows;
